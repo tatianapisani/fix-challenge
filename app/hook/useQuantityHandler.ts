@@ -112,26 +112,16 @@ export const useQuantityHandler = ({
     };
 
     const handleAreaBlur = () => {
-        // Normaliza decimales y convierte a "cajas"/unidades según tu dominio.
-        // Suponemos areaPerBox (m² por caja). Si no existe, usamos 1 para evitar NaN.
-        const areaPerBox = product.areaPerBox && product.areaPerBox > 0 ? product.areaPerBox : 1;
         const raw = areaInput.replace(",", ".");
         const area = Math.max(0, Number.parseFloat(raw) || 0);
-
         const normalizedArea = Math.round(area * 100) / 100;
+
         setAreaInput(String(normalizedArea));
 
-        // Convertir área -> cajas (ceil). Clampear a stock.
-        const boxes = Math.min(Math.ceil(normalizedArea / areaPerBox), Math.max(0, product.stock || 0));
-
-        // Si tu carrito para "area" guarda cajas, notificá con boxes:
-        if (boxes > 0) {
-            onQuantityChange(boxes);
-            updateQuantity(product.id, boxes);
-            setQuantity(boxes);
-        } else {
-            setQuantity(0);
-        }
+        // Por ahora, solo actualizamos el estado interno.
+        // Si querés que 'quantity' represente el área directamente:
+        onQuantityChange(normalizedArea);
+        setQuantity(normalizedArea);
     };
 
     // ---------------- botones +/- ----------------
