@@ -1,132 +1,177 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Product } from "@/app/types/product-types";
 import { useCart } from "@/app/context/cart/CartContext";
 
-interface useQuantityHandlerProps {
-  product: Product;
-  value: number;
-  onQuantityChange: (quantity: number) => void;
-  context?: "cart" | "productDetails";
+interface UseQuantityHandlerProps {
+    product: Product;
+    value: number;
+    onQuantityChange: (quantity: number) => void;
+    context?: "cart" | "productDetails";
 }
 
-export const useQuantityHandler = ({ product, value, onQuantityChange, context }: useQuantityHandlerProps) => {
-  const unitValue = product.unitValue || 1; 
-  const maxQuantity = product.salesUnit === "area" ? product.stock : Math.floor(product.stock * unitValue / unitValue) * unitValue;
+/**
+ * Convenciones:
+ * - unitsPerPallet: unidades por pallet (>=1).
+ * - maxQuantity:
+ *    - "group" / "unit": máximo en UNIDADES = stock * unitsPerPallet
+ *    - "area": máximo en "cajas" = stock (si tu dominio usa cajas)
+ * - updateQuantityHandler(newUnits): recibe UNIDADES y sincroniza todo.
+ * - En carrito ("group"): se guarda PALLETS (no unidades).
+ */
+export const useQuantityHandler = ({
+    product,
+    value,
+    onQuantityChange,
+    context = "productDetails",
+}: UseQuantityHandlerProps) => {
+    const unitsPerPallet = product.unitValue && product.unitValue > 0 ? product.unitValue : 1;
 
-  const { cart, updateQuantity } = useCart();
-  const cartItem = cart.items.find((item) => item.product.id === product.id);
-  const currentQuantity = cartItem ? cartItem.quantity : 0;
+    const maxQuantity =
+        product.salesUnit === "area"
+            ? product.stock // para "area" solemos pensar en cajas disponibles
+            : product.stock * unitsPerPallet; // para "group"/"unit": máximo en UNIDADES
 
-  const [quantity, setQuantity] = useState<number>(currentQuantity);
-  const [areaInput, setAreaInput] = useState<string>("");
-  const [groupInput, setGroupInput] = useState<string>((currentQuantity / unitValue).toString());
-  const [unitsInput, setUnitsInput] = useState<string>(currentQuantity.toString());
+    const { cart, updateQuantity } = useCart();
+    const cartItem = cart.items.find((i) => i.product.id === product.id);
+    const currentQuantity = cartItem ? cartItem.quantity : 0;
 
- useEffect(() => {
-  if (value === 0 && currentQuantity !== quantity) {
-    setQuantity(currentQuantity);
-    setUnitsInput(currentQuantity.toString());
-    setGroupInput((currentQuantity / unitValue).toString());
-  }
-}, [value, currentQuantity, quantity, unitValue]);
+    // Estados visibles en UI
+    const [quantity, setQuantity] = useState<number>(currentQuantity); // para mostrar en UI (si aplica)
+    const [areaInput, setAreaInput] = useState<string>("");
+    const [groupInput, setGroupInput] = useState<string>(
+        (Math.floor(currentQuantity / unitsPerPallet) || 0).toString()
+    );
+    const [unitsInput, setUnitsInput] = useState<string>(currentQuantity.toString());
 
-  
-const updateQuantityHandler = (newQuantity: number) => {
-  const adjustedQuantity = Math.min(newQuantity, maxQuantity);
-  setQuantity(adjustedQuantity);
-  setUnitsInput(adjustedQuantity.toString());
-  
-  // redondear el valor hacia abajo para evitar decimales en PALLETS
-  const adjustedPallets = Math.floor(adjustedQuantity / unitValue);
-  setGroupInput(adjustedPallets.toString());
+    // Sincroniza cuando viene cantidad desde afuera (p.ej. carrito)
+    useEffect(() => {
+        if (value === 0 && currentQuantity !== quantity) {
+            setQuantity(currentQuantity);
+            setUnitsInput(currentQuantity.toString());
+            setGroupInput((Math.floor(currentQuantity / unitsPerPallet) || 0).toString());
+        }
+    }, [value, currentQuantity, quantity, unitsPerPallet]);
 
-  // SI el producto es de tipo 'group', la cantidad en el carrito debe ser en PALLETS
-  const finalQuantity = product.salesUnit === "group"
-    ? adjustedPallets 
-    : adjustedQuantity;
+    // ---------- Core: una sola fuente de verdad para ajustar y sincronizar ----------
+    const updateQuantityHandler = (newUnitsRaw: number) => {
+        // clamp a rango válido de UNIDADES
+        const newUnits = Math.max(0, Math.min(newUnitsRaw, maxQuantity));
 
-  // NO eliminamos el producto si la cantidad es 0 para tipo "group"
-  if (finalQuantity > 0) {
-    onQuantityChange(finalQuantity);
-    updateQuantity(product.id, finalQuantity); 
-  }
-};
+        // pallets derivados
+        const pallets = Math.floor(newUnits / unitsPerPallet);
 
+        // reflejar en UI
+        setUnitsInput(String(newUnits));
+        setGroupInput(String(pallets));
+        setQuantity(newUnits);
 
-  const handleAreaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputArea = e.target.value; 
-    setAreaInput(inputArea); 
+        // Qué guardamos externamente:
+        // - "group": guardar PALLETS
+        // - "unit": guardar UNIDADES
+        // - "area": depende de tu dominio (aquí no se usa updateQuantityHandler para area)
+        const finalForCart =
+            product.salesUnit === "group" ? pallets : newUnits;
 
-    const numericArea = parseFloat(inputArea) || 0;
-    const unitsRequired = Math.min(Math.ceil(numericArea / unitValue), maxQuantity); 
+        if (finalForCart > 0) {
+            onQuantityChange(finalForCart);
+            updateQuantity(product.id, finalForCart);
+        }
+    };
 
-    updateQuantityHandler(unitsRequired); 
-  };
+    // ---------------- onChange: solo reflejan lo que el usuario escribe ----------------
+    const handleUnitsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const n = parseInt(e.target.value, 10);
+        setUnitsInput(Number.isFinite(n) && n >= 0 ? String(n) : "0");
 
-  const handleGroupInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputPallets = parseInt(e.target.value, 10) || 0;
-  
-    // convertir los PALLETS a unidades antes de actualizar
-    const adjustedPallets = Math.min(inputPallets, product.stock);
-    const adjustedUnits = adjustedPallets * unitValue; // conversión de pallets a unidades
-  
-    setGroupInput(adjustedPallets.toString());
-    setUnitsInput(adjustedUnits.toString());
-  
-    updateQuantityHandler(adjustedUnits); 
-  };
-  
-  
-  
-  const handleUnitsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputUnits = parseInt(e.target.value, 10) || 0;
-  
-    // limitar las unidades al stock máx. disponible en unidades
-    const adjustedUnits = Math.min(inputUnits, product.stock * unitValue);
-  
-    // caclular los PALLETS redondeando el valor hacia abajo
-    const adjustedPallets = Math.floor(adjustedUnits / unitValue);
-  
-    setUnitsInput(adjustedUnits.toString());
-    setGroupInput(adjustedPallets.toString());
-  
-    updateQuantityHandler(adjustedUnits);
-  };
-  
-  
-  const handleIncrement = () => {
-    let newQuantity = quantity;
-    if (context === "cart") {
-      newQuantity = Math.min(quantity + 1, maxQuantity);
-    } else {
-      newQuantity = product.salesUnit === "group"
-        ? Math.min(quantity + unitValue, maxQuantity)
-        : Math.min(quantity + 1, maxQuantity);
-    }
-    updateQuantityHandler(newQuantity);
-  };
+        // si querés feedback inmediato en pallets mientras escribe:
+        const live = Number.isFinite(n) && n >= 0 ? Math.floor(n / unitsPerPallet) : 0;
+        setGroupInput(String(live));
+    };
 
-  const handleDecrement = () => {
-    let newQuantity = quantity;
-    if (context === "cart") {
-      newQuantity = Math.max(1, quantity - 1);
-    } else {
-      newQuantity = product.salesUnit === "group"
-        ? Math.max(1, quantity - unitValue)
-        : Math.max(1, quantity - 1);
-    }
-    updateQuantityHandler(newQuantity);
-  };
+    const handleGroupInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const p = parseInt(e.target.value, 10);
+        const pallets = Number.isFinite(p) && p >= 0 ? p : 0;
+        setGroupInput(String(pallets));
+        setUnitsInput(String(pallets * unitsPerPallet));
+    };
 
-  return {
-    quantity,
-    areaInput,
-    groupInput,
-    unitsInput,
-    handleAreaInputChange,
-    handleGroupInputChange,
-    handleUnitsInputChange,
-    handleIncrement,
-    handleDecrement,
-  };
+    const handleAreaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setAreaInput(e.target.value); // se valida en blur
+    };
+
+    // ---------------- onBlur: validan y sincronizan usando updateQuantityHandler ----------------
+    const handleUnitsBlur = () => {
+        const val = parseInt(unitsInput, 10) || 0;
+        updateQuantityHandler(val);
+    };
+
+    const handleGroupBlur = () => {
+        const pallets = parseInt(groupInput, 10) || 0;
+        const units = pallets * unitsPerPallet;
+        updateQuantityHandler(units);
+    };
+
+    const handleAreaBlur = () => {
+        // Normaliza decimales y convierte a "cajas"/unidades según tu dominio.
+        // Suponemos areaPerBox (m² por caja). Si no existe, usamos 1 para evitar NaN.
+        const areaPerBox = product.areaPerBox && product.areaPerBox > 0 ? product.areaPerBox : 1;
+        const raw = areaInput.replace(",", ".");
+        const area = Math.max(0, Number.parseFloat(raw) || 0);
+
+        const normalizedArea = Math.round(area * 100) / 100;
+        setAreaInput(String(normalizedArea));
+
+        // Convertir área -> cajas (ceil). Clampear a stock.
+        const boxes = Math.min(Math.ceil(normalizedArea / areaPerBox), Math.max(0, product.stock || 0));
+
+        // Si tu carrito para "area" guarda cajas, notificá con boxes:
+        if (boxes > 0) {
+            onQuantityChange(boxes);
+            updateQuantity(product.id, boxes);
+            setQuantity(boxes);
+        } else {
+            setQuantity(0);
+        }
+    };
+
+    // ---------------- botones +/- ----------------
+    const handleIncrement = () => {
+        if (context === "cart") {
+            updateQuantityHandler(quantity + 1);
+        } else {
+            const step = product.salesUnit === "group" ? unitsPerPallet : 1;
+            updateQuantityHandler(quantity + step);
+        }
+    };
+
+    const handleDecrement = () => {
+        if (context === "cart") {
+            updateQuantityHandler(Math.max(1, quantity - 1));
+        } else {
+            const step = product.salesUnit === "group" ? unitsPerPallet : 1;
+            updateQuantityHandler(Math.max(1, quantity - step));
+        }
+    };
+
+    return {
+        // state
+        quantity,
+        areaInput,
+        groupInput,
+        unitsInput,
+
+        // change
+        handleAreaInputChange,
+        handleGroupInputChange,
+        handleUnitsInputChange,
+
+        // blur (validación)
+        handleAreaBlur,
+        handleGroupBlur,
+        handleUnitsBlur,
+
+        // +/- 
+        handleIncrement,
+        handleDecrement,
+    };
 };
