@@ -49,7 +49,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       if (existItem) {
         const updatedQuantity = existItem.quantity + quantity;
         if (updatedQuantity > maxQuantity) return prevCart; // no permitir más de la cantidad máxima
-  
+           
         return {
           ...prevCart,
           items: prevCart.items.map((item) =>
@@ -69,7 +69,8 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   
 
   // función para actualizar la cantidad de un producto existente en el carrito
-  const updateQuantity = (productId: string, quantity: number) => {
+    const updateQuantity = (productId: string, quantity: number) => {
+        console.log(productId)
     setCart((prevCart) => {
       // Si la cantidad es 0, eliminar el producto
       if (quantity === 0) {
@@ -78,7 +79,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
           items: prevCart.items.filter((item) => item.product.id !== productId),
         };
       }
-  
+        
       // Actualizar la cantidad si el producto existe
       const updatedItems = prevCart.items.map((item) =>
         item.product.id === productId ? { ...item, quantity } : item
