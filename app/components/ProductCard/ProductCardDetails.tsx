@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useState } from "react";
 import { Product } from "@/app/types/product-types";
 // import { calculateDiscount } from "@/app/lib/calculateDiscount";
@@ -18,8 +18,14 @@ const ProductCardDetails: React.FC<ProductCardDetailsProps> = ({ product }) => {
 
   // Obtener la cantidad actual del producto en el carrito
   const cartItem = cart.items.find((item) => item.product.id === product.id);
-  const currentQuantity = cartItem ? cartItem.quantity : 0;
-
+ 
+    const currentQuantity =
+        cartItem
+            ? product.salesUnit === "group"
+                ? cartItem.quantity * (product.unitValue ?? 1) // pallets → unidades
+                : cartItem.quantity
+            : 0;
+ 
   const [selectedQuantity, setSelectedQuantity] = useState<number>(currentQuantity);
 
   // actualizar la cantidad seleccionada 
@@ -79,7 +85,7 @@ const ProductCardDetails: React.FC<ProductCardDetailsProps> = ({ product }) => {
         <div className="my-6">
          <QuantitySelector
           product={product}
-          value={selectedQuantity}
+          value={currentQuantity}
           onQuantityChange={handleQuantityChange}
           data-testid={`quantity-${product.salesUnit}-input`}
           />

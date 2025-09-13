@@ -69,7 +69,9 @@ export const useQuantityHandler = ({ product, value, onQuantityChange, context }
     };
 
     const handleUnitsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
         const inputUnits = parseInt(e.target.value, 10) || 0;
+        
         setUnitsInput(inputUnits.toString());
         const adjustedUnits = Math.min(inputUnits, product.stock * unitValue);
         const adjustedPallets = Math.floor(adjustedUnits / unitValue);
