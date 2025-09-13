@@ -42,22 +42,25 @@ const ProductCardDetails: React.FC<ProductCardDetailsProps> = ({ product }) => {
 
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-6 py-2 sm:py-14 sm:px-5 rounded-lg shadow w-full max-w-4xl mx-auto">
-    <div className="absolute top-40 z-10 hidden lg:block">
-      <BackButton label="Volver" />
-    </div>
-    <div className="relative w-full sm:w-1/2 flex-shrink-0 mb-6 sm:mb-0">
-      {product.image && (
-        <Image
-          src={product.image}
-          alt={product.title}
-          width={300}
-          height={300}
-          priority
-          className="object-contain object-cover rounded-lg h-80 w-full sm:w-auto sm:h-auto"
-        />
-      )}
-    </div>
+      <div className="flex flex-col sm:flex-row items-start justify-between bg-white p-6 py-2 sm:py-14 sm:px-5 rounded-lg shadow w-full max-w-4xl mx-auto">
+          {/* Columna de imagen + botn */}
+          <div className="w-full sm:w-1/2 flex-shrink-0 mb-6 sm:mb-0 flex flex-col items-start">
+              {/* Botn Volver SIEMPRE arriba (no absoluto) */}
+              <div className="mb-3">
+                  <BackButton label="Volver" />
+              </div>
+
+              {product.image && (
+                  <Image
+                      src={product.image}
+                      alt={product.title}
+                      width={300}
+                      height={300}
+                      priority
+                      className="object-contain rounded-lg h-80 w-full sm:w-auto sm:h-auto"
+                  />
+              )}
+          </div>
 
     {/* detalles del producto */}
     <div className="flex-grow w-full sm:w-1/2">
