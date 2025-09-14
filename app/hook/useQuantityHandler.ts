@@ -1,167 +1,185 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Product } from "@/app/types/product-types";
 import { useCart } from "@/app/context/cart/CartContext";
 
-interface UseQuantityHandlerProps {
-    product: Product;
-    value: number;
-    onQuantityChange: (quantity: number) => void;
-    context?: "cart" | "productDetails";
+interface useQuantityHandlerProps {
+  product: Product;
+  value: number;
+  onQuantityChange: (quantity: number) => void;
+  context?: "cart" | "productDetails";
 }
 
-/**
- * Convenciones:
- * - unitsPerPallet: unidades por pallet (>=1).
- * - maxQuantity:
- *    - "group" / "unit": máximo en UNIDADES = stock * unitsPerPallet
- *    - "area": máximo en "cajas" = stock (si tu dominio usa cajas)
- * - updateQuantityHandler(newUnits): recibe UNIDADES y sincroniza todo.
- * - En carrito ("group"): se guarda PALLETS (no unidades).
- */
 export const useQuantityHandler = ({
-    product,
-    value,
-    onQuantityChange,
-    context = "productDetails",
-}: UseQuantityHandlerProps) => {
-    const unitsPerPallet = product.unitValue && product.unitValue > 0 ? product.unitValue : 1;
+  product,
+  value,
+  onQuantityChange,
+  context,
+}: useQuantityHandlerProps) => {
+  const unitValue = product.unitValue || 1;
 
-    const maxQuantity =
-        product.salesUnit === "area"
-            ? product.stock // para "area" solemos pensar en cajas disponibles
-            : product.stock * unitsPerPallet; // para "group"/"unit": máximo en UNIDADES
+  // En "area": max en cajas = stock. En otros: conservar tu cálculo actual.
+  const maxQuantity =
+    product.salesUnit === "area"
+      ? product.stock
+      : Math.floor((product.stock * unitValue) / unitValue) * unitValue;
 
-    const { cart, updateQuantity } = useCart();
-    const cartItem = cart.items.find((i) => i.product.id === product.id);
-    const currentQuantity = cartItem ? cartItem.quantity : 0;
+  const { cart, updateQuantity } = useCart();
+  const cartItem = cart.items.find((item) => item.product.id === product.id);
+  const currentQuantity = cartItem ? cartItem.quantity : 0;
 
-    // Estados visibles en UI
-    const [quantity, setQuantity] = useState<number>(currentQuantity); // para mostrar en UI (si aplica)
-    const [areaInput, setAreaInput] = useState<string>("");
-    const [groupInput, setGroupInput] = useState<string>(
-        (Math.floor(currentQuantity / unitsPerPallet) || 0).toString()
-    );
-    const [unitsInput, setUnitsInput] = useState<string>(currentQuantity.toString());
+  const [quantity, setQuantity] = useState<number>(currentQuantity);
+  const [areaInput, setAreaInput] = useState<string>("");
+  const [groupInput, setGroupInput] = useState<string>(
+    (currentQuantity / unitValue).toString()
+  );
+  const [unitsInput, setUnitsInput] = useState<string>(
+    currentQuantity.toString()
+  );
 
-    // Sincroniza cuando viene cantidad desde afuera (p.ej. carrito)
-    useEffect(() => {
-        if (value === 0 && currentQuantity !== quantity) {
-            setQuantity(currentQuantity);
-            setUnitsInput(currentQuantity.toString());
-            setGroupInput((Math.floor(currentQuantity / unitsPerPallet) || 0).toString());
-        }
-    }, [value, currentQuantity, quantity, unitsPerPallet]);
+  // 👉 Para saber qué campo fue editado por última vez (evitar sobrescribir superficie cuando viene de "Superficie")
+  const lastEditedRef = useRef<"area" | "units" | "group" | null>(null);
 
-    // ---------- Core: una sola fuente de verdad para ajustar y sincronizar ----------
-    const updateQuantityHandler = (newUnitsRaw: number) => {
-        // clamp a rango válido de UNIDADES
-        const newUnits = Math.max(0, Math.min(newUnitsRaw, maxQuantity));
+  // Sincronización inicial
+  useEffect(() => {
+    if (value === 0 && currentQuantity !== quantity) {
+      setQuantity(currentQuantity);
+      setUnitsInput(currentQuantity.toString());
+      setGroupInput((currentQuantity / unitValue).toString());
 
-        // pallets derivados
-        const pallets = Math.floor(newUnits / unitsPerPallet);
+      if (product.salesUnit === "area") {
+        // En carga inicial mostramos la derivada, está bien
+        setAreaInput((currentQuantity * unitValue).toFixed(2));
+      }
+    }
+  }, [value, currentQuantity, quantity, unitValue, product.salesUnit]);
 
-        // reflejar en UI
-        setUnitsInput(String(newUnits));
-        setGroupInput(String(pallets));
-        setQuantity(newUnits);
+  // Consolida cambios y deriva lo necesario
+  const updateQuantityHandler = (newQuantity: number) => {
+    const adjustedQuantity = Math.max(0, Math.min(newQuantity, maxQuantity));
 
-        // Qué guardamos externamente:
-        // - "group": guardar PALLETS
-        // - "unit": guardar UNIDADES
-        // - "area": depende de tu dominio (aquí no se usa updateQuantityHandler para area)
-        const finalForCart =
-            product.salesUnit === "group" ? pallets : newUnits;
+    setQuantity(adjustedQuantity);
+    setUnitsInput(adjustedQuantity.toString());
 
-        if (finalForCart > 0) {
-            onQuantityChange(finalForCart);
-            updateQuantity(product.id, finalForCart);
-        }
-    };
+    // pallets entero
+    const adjustedPallets = Math.floor(adjustedQuantity / unitValue);
+    setGroupInput(adjustedPallets.toString());
 
-    // ---------------- onChange: solo reflejan lo que el usuario escribe ----------------
-    const handleUnitsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const n = parseInt(e.target.value, 10);
-        setUnitsInput(Number.isFinite(n) && n >= 0 ? String(n) : "0");
+    // ✅ SOLO si el último edit fue por "units" (cajas), derivamos Superficie.
+    // Si el último edit fue por "area", NO sobrescribimos el input del usuario.
+    if (product.salesUnit === "area" && lastEditedRef.current === "units") {
+      setAreaInput((adjustedQuantity * unitValue).toFixed(2));
+    }
 
-        // si querés feedback inmediato en pallets mientras escribe:
-        const live = Number.isFinite(n) && n >= 0 ? Math.floor(n / unitsPerPallet) : 0;
-        setGroupInput(String(live));
-    };
+    // "group" guarda pallets; "unit"/"area" guarda unidades/cajas
+    const finalQuantity =
+      product.salesUnit === "group" ? adjustedPallets : adjustedQuantity;
 
-    const handleGroupInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const p = parseInt(e.target.value, 10);
-        const pallets = Number.isFinite(p) && p >= 0 ? p : 0;
-        setGroupInput(String(pallets));
-        setUnitsInput(String(pallets * unitsPerPallet));
-    };
+    if (finalQuantity > 0) {
+      onQuantityChange(finalQuantity);
+      updateQuantity(product.id, finalQuantity);
+    }
+  };
 
-    const handleAreaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setAreaInput(e.target.value); // se valida en blur
-    };
+  // ------- Handlers -------
 
-    // ---------------- onBlur: validan y sincronizan usando updateQuantityHandler ----------------
-    const handleUnitsBlur = () => {
-        const val = parseInt(unitsInput, 10) || 0;
-        updateQuantityHandler(val);
-    };
+  // SUPERFICIE: permitir escribir libremente; commit en blur
+  const handleAreaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    lastEditedRef.current = "area";
+    const raw = (e.target.value ?? "").replace(",", ".");
+    setAreaInput(raw);
+  };
 
-    const handleGroupBlur = () => {
-        const pallets = parseInt(groupInput, 10) || 0;
-        const units = pallets * unitsPerPallet;
-        updateQuantityHandler(units);
-    };
+  const handleAreaBlur = () => {
+    const raw = (areaInput ?? "").trim();
 
-    const handleAreaBlur = () => {
-        const raw = areaInput.replace(",", ".");
-        const area = Math.max(0, Number.parseFloat(raw) || 0);
-        const normalizedArea = Math.round(area * 100) / 100;
+    // Permitir borrar
+    if (raw === "") {
+      // Evitamos sobrescribir a derivada; dejamos 0 en todo
+      lastEditedRef.current = "area";
+      updateQuantityHandler(0); // NO reescribe superficie porque lastEditedRef = "area"
+      return;
+    }
 
-        setAreaInput(String(normalizedArea));
+    const area = Math.max(0, Number.parseFloat(raw) || 0);
+    // 🔁 Política pedida: ENTERO MÁS CERCANO (no ceil)
+    const unitsRequired = Math.min(Math.round(area / unitValue), maxQuantity);
 
-        // Por ahora, solo actualizamos el estado interno.
-        // Si querés que 'quantity' represente el área directamente:
-        onQuantityChange(normalizedArea);
-        setQuantity(normalizedArea);
-    };
+    lastEditedRef.current = "area";
+    updateQuantityHandler(unitsRequired); // NO reescribe superficie (se mantiene "7" como ingresaste)
+  };
 
-    // ---------------- botones +/- ----------------
-    const handleIncrement = () => {
-        if (context === "cart") {
-            updateQuantityHandler(quantity + 1);
-        } else {
-            const step = product.salesUnit === "group" ? unitsPerPallet : 1;
-            updateQuantityHandler(quantity + step);
-        }
-    };
+  // PALLETS (group)
+  const handleGroupInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    lastEditedRef.current = "group";
+    const inputPallets = parseInt(e.target.value, 10) || 0;
+    const adjustedPallets = Math.min(inputPallets, product.stock);
+    const adjustedUnits = adjustedPallets * unitValue;
 
-    const handleDecrement = () => {
-        if (context === "cart") {
-            updateQuantityHandler(Math.max(1, quantity - 1));
-        } else {
-            const step = product.salesUnit === "group" ? unitsPerPallet : 1;
-            updateQuantityHandler(Math.max(1, quantity - step));
-        }
-    };
+    setGroupInput(adjustedPallets.toString());
+    setUnitsInput(adjustedUnits.toString());
 
-    return {
-        // state
-        quantity,
-        areaInput,
-        groupInput,
-        unitsInput,
+    // Si cambiás pallets en producto 'area', el último edit NO es "units", así que no se tocará areaInput aquí.
+    // Eso está bien: en 'group' no queremos escribir superficie.
+    updateQuantityHandler(adjustedUnits);
+  };
 
-        // change
-        handleAreaInputChange,
-        handleGroupInputChange,
-        handleUnitsInputChange,
+  // UNIDADES/CAJAS
+  const handleUnitsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    lastEditedRef.current = "units";
+    const inputUnits = parseInt(e.target.value, 10) || 0;
+    const adjustedUnits = Math.min(inputUnits, product.stock * unitValue);
+    const adjustedPallets = Math.floor(adjustedUnits / unitValue);
 
-        // blur (validación)
-        handleAreaBlur,
-        handleGroupBlur,
-        handleUnitsBlur,
+    setUnitsInput(adjustedUnits.toString());
+    setGroupInput(adjustedPallets.toString());
 
-        // +/- 
-        handleIncrement,
-        handleDecrement,
-    };
+    updateQuantityHandler(adjustedUnits); // ← al venir de "units", SÍ derivará superficie
+  };
+
+  // +/- (igual que antes)
+  const handleIncrement = () => {
+    lastEditedRef.current = "units";
+    let newQuantity = quantity;
+    if (context === "cart") {
+      newQuantity = Math.min(quantity + 1, maxQuantity);
+    } else {
+      newQuantity =
+        product.salesUnit === "group"
+          ? Math.min(quantity + unitValue, maxQuantity)
+          : Math.min(quantity + 1, maxQuantity);
+    }
+    updateQuantityHandler(newQuantity);
+  };
+
+  const handleDecrement = () => {
+    lastEditedRef.current = "units";
+    let newQuantity = quantity;
+    if (context === "cart") {
+      newQuantity = Math.max(1, quantity - 1);
+    } else {
+      newQuantity =
+        product.salesUnit === "group"
+          ? Math.max(1, quantity - unitValue)
+          : Math.max(1, quantity - 1);
+    }
+    updateQuantityHandler(newQuantity);
+  };
+
+  return {
+    // state
+    quantity,
+    areaInput,
+    groupInput,
+    unitsInput,
+
+    // change
+    handleAreaInputChange,
+    handleAreaBlur,            // <- usalo en el input de Superficie (onBlur)
+    handleGroupInputChange,
+    handleUnitsInputChange,
+
+    // +/- 
+    handleIncrement,
+    handleDecrement,
+  };
 };
