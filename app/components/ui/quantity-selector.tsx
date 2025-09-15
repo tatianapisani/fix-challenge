@@ -24,6 +24,8 @@ const QuantitySelector: React.FC<QuantitySelectorProps> = ({
     handleAreaBlur,             // ✅ commit en blur
     handleGroupInputChange,
     handleUnitsInputChange,
+    handleGroupBlur, 
+    handleUnitsBlur,           // ✅ commit en blur
     handleIncrement,
     handleDecrement,
   } = useQuantityHandler({ product, value, onQuantityChange, context });
@@ -57,29 +59,30 @@ const QuantitySelector: React.FC<QuantitySelectorProps> = ({
         <>
           <div className="flex items-center space-x-2">
             <label className="text-sm font-semibold">Cantidad de unidades:</label>
-            <input
-              type="text"
-              min={198}
-              placeholder="198"
-              value={unitsInput}
-              onChange={handleUnitsInputChange}
-              className="border rounded text-center px-2 py-1 w-20"
-            />
+           <input
+           type="number"
+          min={0}
+          placeholder="198"
+           value={unitsInput}
+           onChange={handleUnitsInputChange}
+           onBlur={handleUnitsBlur} // Added onBlur event
+           className="border rounded text-center px-2 py-1 w-20"
+          />
           </div>
 
           <div className="flex items-center space-x-2">
             <label className="text-sm font-semibold">Cantidad de pallets:</label>
-            <input
-              data-testid="quantity-group-input"
-              type="number"
-              min={0}
-              max={product.stock}
-              step={1}
-              value={groupInput}
-              onChange={handleGroupInputChange}
-              className="border rounded text-center px-2 py-1 w-20"
-            />
-          </div>
+           <input
+          data-testid="quantity-group-input"
+          type="number"
+          min={0}
+          max={product.stock}
+          step={1}
+          value={groupInput}
+          onChange={handleGroupInputChange}
+          onBlur={handleGroupBlur} // Added onBlur event
+          className="border rounded text-center px-2 py-1 w-20"
+/>          </div>
         </>
       )}
 

@@ -61,7 +61,7 @@ export const useQuantityHandler = ({
     setUnitsInput(adjustedQuantity.toString());
 
     // pallets entero
-    const adjustedPallets = Math.floor(adjustedQuantity / unitValue);
+    const adjustedPallets = Math.round(adjustedQuantity / unitValue);
     setGroupInput(adjustedPallets.toString());
 
     // ✅ SOLO si el último edit fue por "units" (cajas), derivamos Superficie.
@@ -108,34 +108,42 @@ export const useQuantityHandler = ({
     updateQuantityHandler(unitsRequired); // NO reescribe superficie (se mantiene "7" como ingresaste)
   };
 
+
   // PALLETS (group)
-  const handleGroupInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    lastEditedRef.current = "group";
-    const inputPallets = parseInt(e.target.value, 10) || 0;
-    const adjustedPallets = Math.min(inputPallets, product.stock);
-    const adjustedUnits = adjustedPallets * unitValue;
+  // Same logic for handleGroupInputChange and a new handleGroupBlur
+const handleGroupInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+lastEditedRef.current = "group";
+const inputPallets = e.target.value;
+setGroupInput(inputPallets);
+};
 
-    setGroupInput(adjustedPallets.toString());
-    setUnitsInput(adjustedUnits.toString());
+const handleGroupBlur = () => {
+const inputPallets = parseInt(groupInput, 10) || 0;
+const adjustedPallets = Math.min(inputPallets, product.stock);
+const adjustedUnits = adjustedPallets * unitValue;
 
-    // Si cambiás pallets en producto 'area', el último edit NO es "units", así que no se tocará areaInput aquí.
-    // Eso está bien: en 'group' no queremos escribir superficie.
-    updateQuantityHandler(adjustedUnits);
-  };
+setGroupInput(adjustedPallets.toString());
+setUnitsInput(adjustedUnits.toString());
+
+updateQuantityHandler(adjustedUnits);
+};
 
   // UNIDADES/CAJAS
-  const handleUnitsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    lastEditedRef.current = "units";
-    const inputUnits = parseInt(e.target.value, 10) || 0;
-    const adjustedUnits = Math.min(inputUnits, product.stock * unitValue);
-    const adjustedPallets = Math.floor(adjustedUnits / unitValue);
+ const handleUnitsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+lastEditedRef.current = "units";
+const inputUnits = e.target.value;
+setUnitsInput(inputUnits);
+};
 
-    setUnitsInput(adjustedUnits.toString());
-    setGroupInput(adjustedPallets.toString());
+const handleUnitsBlur = () => {
+const inputUnits = parseInt(unitsInput, 10) || 0;
+const adjustedUnits = Math.min(inputUnits, product.stock * unitValue);
+const adjustedPallets = Math.round(adjustedUnits / unitValue);
+setUnitsInput(adjustedUnits.toString());
+setGroupInput(adjustedPallets.toString());
 
-    updateQuantityHandler(adjustedUnits); // ← al venir de "units", SÍ derivará superficie
-  };
-
+updateQuantityHandler(adjustedUnits);
+};
   // +/- (igual que antes)
   const handleIncrement = () => {
     lastEditedRef.current = "units";
@@ -177,6 +185,8 @@ export const useQuantityHandler = ({
     handleAreaBlur,            // <- usalo en el input de Superficie (onBlur)
     handleGroupInputChange,
     handleUnitsInputChange,
+    handleUnitsBlur,
+    handleGroupBlur,
 
     // +/- 
     handleIncrement,
