@@ -17,19 +17,18 @@ export const useQuantityHandler = ({ product, value, onQuantityChange, context }
     const cartItem = cart.items.find((item) => item.product.id === product.id);
     const currentQuantity = cartItem ? cartItem.quantity : 0;
 
-    // Re-introducimos el estado local. El problema no era el estado, sino su sincronización.
+  
     const [quantity, setQuantity] = useState<number>(value);
     const [areaInput, setAreaInput] = useState<string>("");
     const [groupInput, setGroupInput] = useState<string>((value / unitValue).toString());
     const [unitsInput, setUnitsInput] = useState<string>(value.toString());
 
-    // Este useEffect es clave: sincroniza el estado local con la única fuente de verdad (el carrito)
-    // cada vez que el valor de la prop cambia.
+
     useEffect(() => {
         setQuantity(value);
         setUnitsInput(value.toString());
         setGroupInput((value / unitValue).toString());
-        // El areaInput debe recalcularse en base a la cantidad de unidades
+       
         if (product.salesUnit === "area") {
             const area = value * unitValue;
             setAreaInput(area.toString());
@@ -39,13 +38,11 @@ export const useQuantityHandler = ({ product, value, onQuantityChange, context }
     }, [value, product.salesUnit, unitValue]);
 
     const updateQuantityHandler = (newQuantity: number) => {
-        // Para el contexto del carrito, la cantidad final es la nueva cantidad.
-        // Para otros contextos, calculamos la cantidad de pallets si es necesario.
+    
         const finalQuantity = context === "cart"
             ? newQuantity
             : (product.salesUnit === "group" ? Math.floor(newQuantity / unitValue) : newQuantity);
 
-        // Solo actualizamos el carrito si la cantidad es mayor a 0 para no eliminar el producto.
         if (finalQuantity > 0) {
             onQuantityChange(finalQuantity);
         }
@@ -74,7 +71,7 @@ export const useQuantityHandler = ({ product, value, onQuantityChange, context }
         
         setUnitsInput(inputUnits.toString());
         const adjustedUnits = Math.min(inputUnits, product.stock * unitValue);
-        const adjustedPallets = Math.floor(adjustedUnits / unitValue);
+        const adjustedPallets = Math.round(adjustedUnits / unitValue);
         setGroupInput(adjustedPallets.toString());
         updateQuantityHandler(adjustedUnits);
     };
