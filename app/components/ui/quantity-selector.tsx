@@ -21,11 +21,11 @@ const QuantitySelector: React.FC<QuantitySelectorProps> = ({
     groupInput,
     unitsInput,
     handleAreaInputChange,
-    handleAreaBlur,             // ✅ commit en blur
+    handleAreaBlur,             
     handleGroupInputChange,
     handleUnitsInputChange,
     handleGroupBlur, 
-    handleUnitsBlur,           // ✅ commit en blur
+    handleUnitsBlur,           
     handleIncrement,
     handleDecrement,
   } = useQuantityHandler({ product, value, onQuantityChange, context });

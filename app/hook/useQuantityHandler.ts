@@ -182,7 +182,7 @@ updateQuantityHandler(adjustedUnits);
 
     // change
     handleAreaInputChange,
-    handleAreaBlur,            // <- usalo en el input de Superficie (onBlur)
+    handleAreaBlur,            
     handleGroupInputChange,
     handleUnitsInputChange,
     handleUnitsBlur,
