@@ -99,7 +99,7 @@ const QuantitySelector: React.FC<QuantitySelectorProps> = ({
               min={0}
               value={areaInput}
               onChange={handleAreaInputChange}
-              onBlur={handleAreaBlur}        // ✅ commit en blur
+              onBlur={handleAreaBlur}     
               placeholder="2.68"
               className="border rounded px-2 py-1 w-14 h-auto"
             />
